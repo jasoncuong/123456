@@ -10,40 +10,49 @@ import org.apache.hadoop.mapreduce.lib.input.FileInputFormat;
 import org.apache.hadoop.mapreduce.lib.output.FileOutputFormat;
 
 public class TienDien {
-public static class AvgElectricityMapper extends Mapper<Object, Text, Text, IntWritable> {
+public static class ElectricityMapper extends Mapper<Object, Text, Text, IntWritable> {
+        private final static IntWritable one = new IntWritable(1);
         private Text year = new Text();
-        private IntWritable avgConsumption = new IntWritable();
-        public void map(Object key, Text value, Context context) throws IOException, InterruptedException {
-            String[] fields = value.toString().split(",");
-            year.set(fields[0]);
-            int sum = 0;
-            for (int i = 1; i < fields.length; i++) {
-                sum += Integer.parseInt(fields[i]);
+
+        public void map(Object key, Text value, Context context) throws IOException, InterruptedException   
+ {
+            String[] line = value.toString().split("\t");   
+
+            year.set(line[0]);
+            int consumption = Integer.parseInt(line[13]); // Assuming the last column is the average consumption
+            if (consumption > 30) {
+                context.write(year, one);
             }
-            int average = sum / (fields.length - 1);
-            avgConsumption.set(average);
-            context.write(year, avgConsumption);
         }
     }
-public static class AvgElectricityReducer extends Reducer<Text, IntWritable, Text, IntWritable> {
+
+    public static class ElectricityReducer extends Reducer<Text, IntWritable, Text, IntWritable> {
         public void reduce(Text key, Iterable<IntWritable> values, Context context) throws IOException, InterruptedException {
-            for (IntWritable val : values) {
-                if (val.get() > 30) {
-                    context.write(key, val);
-                }
+            int sum = 0;
+            for (IntWritable   
+ val : values) {
+                sum += val.get();
             }
+            context.write(key, new IntWritable(sum));
         }
     }
-public static void main(String[] args) throws Exception {
+
+    public static void main(String[] args) throws Exception {
         Configuration conf = new Configuration();
-        Job job = Job.getInstance(conf, "Tinh trung binh tieu thu dien");
-        job.setJarByClass(TienDien.class);
-        job.setMapperClass(AvgElectricityMapper.class);
-        job.setReducerClass(AvgElectricityReducer.class);
+        Job job   
+ = Job.getInstance(conf, "Electricity Consumption");
+        job.setJarByClass(ElectricityConsumption.class);
+        job.setMapperClass(ElectricityMapper.class);
+        job.setCombinerClass(ElectricityReducer.class);
+        job.setReducerClass(ElectricityReducer.class);
         job.setOutputKeyClass(Text.class);
         job.setOutputValueClass(IntWritable.class);
-        FileInputFormat.addInputPath(job, new Path(args[0]));
-        FileOutputFormat.setOutputPath(job, new Path(args[1]));
-        System.exit(job.waitForCompletion(true) ? 0 : 1);
-}
+        job.setInputFormatClass(TextInputFormat.class);
+        job.setOutputFormatClass(TextOutputFormat.class);   
+
+        TextInputFormat.setInputPaths(job, new Path(args[0]));
+        TextOutputFormat.setOutputPath(job, new Path(args[1]));
+        System.exit(job.waitForCompletion(true)   
+ ? 0 : 1);
+    }
 }
